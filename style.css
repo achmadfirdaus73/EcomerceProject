@@ -1,0 +1,78 @@
+/* --- Tampilan Dasar --- */
+body {
+    background-color: #f0f2f5;
+}
+
+/* Agar konten tidak tertutup navigasi bawah di mobile */
+.mobile-content-padding {
+    padding-bottom: 60px !important;
+}
+
+
+/* --- Perbaikan Tampilan Carousel (Slick) --- */
+
+/* Mengubah warna panah navigasi carousel jadi hitam */
+.slick-prev:before,
+.slick-next:before {
+    color: black !important;
+}
+
+/* Membuat sudut gambar di dalam carousel jadi tumpul (rounded) */
+.promo-carousel img {
+    border-radius: 8px;
+}
+
+
+/* --- Tampilan Modal Produk Konsumen --- */
+
+/* Pengaturan tombol pilihan tenor */
+.tenor-buttons-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+/* Galeri thumbnail di bawah gambar utama produk */
+.thumbnail-gallery {
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
+    flex-wrap: wrap;
+}
+
+/* Style untuk setiap gambar thumbnail */
+.thumbnail {
+    width: 60px;
+    height: 60px;
+    object-fit: cover;
+    border-radius: 4px;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: border-color 0.2s;
+}
+
+.thumbnail:hover {
+    border-color: #ddd;
+}
+
+/* Style untuk thumbnail yang sedang aktif/dipilih */
+.active-thumbnail {
+    border-color: #00B5AD; /* Warna teal dari Semantic UI */
+}
+
+
+/* --- Animasi Loader (jika diperlukan) --- */
+.loader {
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #333;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    margin-top: 20px;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
