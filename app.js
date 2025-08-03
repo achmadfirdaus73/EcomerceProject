@@ -270,7 +270,7 @@ const PromoCarousel = React.memo(({ promos }) => {
                 speed: 500,
                 slidesToScroll: 1,
                 autoplay: true,
-                autoplaySpeed: 3000,
+                autoplaySpeed: 15000,
                 slidesToShow: 1,
                 adaptiveHeight: true, 
                 centerMode: true,
