@@ -73,7 +73,7 @@ const BroadcastForm = React.memo(({ onAddBroadcast }) => {
 
 const SearchBarWithCart = React.memo(({ searchTerm, setSearchTerm, cartItemCount, onCartClick }) => {
     return (
-        <div className="sticky-header" style={{ flex: 'none' }}> 
+        <div className="sticky-header">
             <div style={{display: 'flex', alignItems: 'center', gap: '10px'}}>
                 <div className="ui fluid icon input" style={{flexGrow: 1}}>
                     <input type="text" placeholder="Cari produk..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
@@ -272,7 +272,7 @@ const PromoCarousel = React.memo(({ promos }) => {
                 autoplay: true,
                 autoplaySpeed: 3000,
                 slidesToShow: 1,
-                adaptiveHeight: false, // Set ke false untuk tinggi yang konsisten
+                adaptiveHeight: true, 
                 centerMode: true,
                 centerPadding: '40px'
             });
@@ -281,7 +281,7 @@ const PromoCarousel = React.memo(({ promos }) => {
 
     if (!promos || promos.length === 0) {
         return (
-            <div className="ui segment placeholder" style={{ margin: '2em 0', minHeight: '150px' }}>
+            <div className="ui segment placeholder" style={{ margin: '2em 0', minHeight: '200px' }}>
                 <div className="line"></div>
                 <div className="line"></div>
                 <div className="line"></div>
@@ -293,7 +293,19 @@ const PromoCarousel = React.memo(({ promos }) => {
         <div ref={carouselRef} className="promo-carousel" style={{ margin: '2em 0' }}>
             {promos.map(promo => (
                 <div key={promo.id} style={{ padding: '0 8px' }}>
-                    <img src={promo.imageUrl} alt={`Promo ${promo.id}`} style={{ width: '100%', borderRadius: '8px' }} />
+                    {promo.type === 'video' ? (
+                        <div className="carousel-video-container">
+                            <iframe 
+                                src={promo.url}
+                                title={`Promo ${promo.id}`} 
+                                frameBorder="0" 
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                                allowFullScreen
+                            ></iframe>
+                        </div>
+                    ) : (
+                        <img src={promo.url} alt={`Promo ${promo.id}`} style={{ width: '100%', borderRadius: '8px' }} />
+                    )}
                 </div>
             ))}
         </div>
@@ -306,7 +318,7 @@ function AdminDashboard({ user, onLogout, onAddProduct, onAddPromo, products, pr
     const [viewingBill, setViewingBill] = useState(null);
     
     const [newProduct, setNewProduct] = useState({ name: '', description: '', hargaModal: '', images: '' });
-    const [newPromoUrl, setNewPromoUrl] = useState('');
+    const [newPromo, setNewPromo] = useState({ type: 'image', url: '' });
     const [searchTerm, setSearchTerm] = useState('');
     const size = useWindowSize();
     const isMobile = size.width < 768;
@@ -335,7 +347,7 @@ function AdminDashboard({ user, onLogout, onAddProduct, onAddPromo, products, pr
     };
 
     const handleProductSubmit = (e) => { e.preventDefault(); if (!newProduct.name || !newProduct.hargaModal || !newProduct.images) return alert('Data produk tidak lengkap'); const p = { id: Date.now(), ...newProduct, hargaModal: parseInt(newProduct.hargaModal), images: newProduct.images.split(',') }; onAddProduct(p); setNewProduct({ name: '', description: '', hargaModal: '', images: '' }); alert('Produk ditambahkan!'); };
-    const handlePromoSubmit = (e) => { e.preventDefault(); if (!newPromoUrl.trim()) return alert('URL kosong'); onAddPromo({ id: `promo-${Date.now()}`, imageUrl: newPromoUrl.trim() }); setNewPromoUrl(''); alert('Gambar Carousel ditambahkan!'); };
+    const handlePromoSubmit = (e) => { e.preventDefault(); if (!newPromo.url.trim()) return alert('URL kosong'); onAddPromo({ id: `promo-${Date.now()}`, ...newPromo }); setNewPromo({ type: 'image', url: '' }); alert('Konten Carousel ditambahkan!'); };
     const renderStatusLabel = (status) => { const s = { 'Proses': 'yellow', 'Pengiriman': 'blue', 'Terkirim': 'green', 'Lunas': 'grey' }; return <span className={`ui ${s[status] || ''} label`}>{status}</span>; };
 
     function AssignCollectorDropdown({ order, collectors, onAssignCollector }) {
@@ -410,9 +422,16 @@ function AdminDashboard({ user, onLogout, onAddProduct, onAddPromo, products, pr
                             </div>
                             <div className="column">
                                 <form className="ui form" onSubmit={handlePromoSubmit}>
-                                    <h4 className="ui header">Tambah Gambar Carousel</h4>
-                                    <div className="field"><input type="text" placeholder="URL Gambar untuk Carousel" value={newPromoUrl} onChange={(e) => setNewPromoUrl(e.target.value)} /></div>
-                                    <button className="ui teal button" type="submit">Tambah Gambar</button>
+                                    <h4 className="ui header">Tambah Konten Carousel</h4>
+                                    <div className="field">
+                                        <label>Tipe Konten</label>
+                                        <select className="ui dropdown" value={newPromo.type} onChange={(e) => setNewPromo({...newPromo, type: e.target.value})}>
+                                            <option value="image">Gambar</option>
+                                            <option value="video">Video (YouTube Embed)</option>
+                                        </select>
+                                    </div>
+                                    <div className="field"><input type="text" placeholder="URL Konten" value={newPromo.url} onChange={(e) => setNewPromo({...newPromo, url: e.target.value})} /></div>
+                                    <button className="ui teal button" type="submit">Tambah Konten</button>
                                 </form>
                             </div>
                         </div>
@@ -1334,9 +1353,9 @@ function App() {
 
     useEffect(() => {
         const defaultPromos = [
-            { id: 'promo1', imageUrl: 'https://images2.imgbox.com/bc/6e/auiVPjLj_o.jpeg' },
-            { id: 'promo2', imageUrl: 'https://images2.imgbox.com/d8/21/CaAGurXT_o.jpeg' },
-            { id: 'promo3', imageUrl: 'https://images2.imgbox.com/0b/9f/0VQPgf9E_o.jpeg' }
+            { id: 'promo1', type: 'image', url: 'https://images2.imgbox.com/bc/6e/auiVPjLj_o.jpeg' },
+            { id: 'promo2', type: 'video', url: 'https://www.youtube.com/embed/ScMzIvxBSi4' },
+            { id: 'promo3', type: 'image', url: 'https://images2.imgbox.com/d8/21/CaAGurXT_o.jpeg' }
         ];
 
         const seedPromos = async () => {
@@ -1438,8 +1457,8 @@ function App() {
     const handleAddPromo = useCallback(async (promoData) => {
         try {
             await db.collection('promos').add(promoData);
-            alert("Gambar Carousel berhasil ditambahkan!");
-        } catch (error) { console.error("Error adding promo: ", error); alert("Gagal menambahkan Gambar Carousel."); }
+            alert("Konten Carousel berhasil ditambahkan!");
+        } catch (error) { console.error("Error adding promo: ", error); alert("Gagal menambahkan Konten Carousel."); }
     }, []);
 
     const handleAddBroadcast = useCallback(async (message) => {
