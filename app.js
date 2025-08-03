@@ -1,4 +1,30 @@
-const { useState, useEffect } = React;
+const { useState, useEffect, useRef, useCallback } = React;
+
+// Custom hook untuk mendapatkan state sebelumnya (untuk notifikasi)
+function usePrevious(value) {
+    const ref = useRef();
+    useEffect(() => {
+        ref.current = value;
+    });
+    return ref.current;
+}
+
+function parseIndonesianDate(dateString) {
+    if (!dateString) return null;
+    const months = {
+        'Januari': 0, 'Februari': 1, 'Maret': 2, 'April': 3, 'Mei': 4, 'Juni': 5,
+        'Juli': 6, 'Agustus': 7, 'September': 8, 'Oktober': 9, 'November': 10, 'Desember': 11
+    };
+    const parts = dateString.split(' ');
+    if (parts.length < 3) return null;
+    const day = parseInt(parts[0], 10);
+    const month = months[parts[1]];
+    const year = parseInt(parts[2], 10);
+    if (!isNaN(day) && month !== undefined && !isNaN(year)) {
+        return new Date(year, month, day);
+    }
+    return null;
+}
 
 function useWindowSize() {
     const [size, setSize] = useState({width: window.innerWidth, height: window.innerHeight});
@@ -12,6 +38,57 @@ function useWindowSize() {
     return size;
 }
 
+// Komponen-komponen yang dioptimasi dengan React.memo
+const BroadcastForm = React.memo(({ onAddBroadcast }) => {
+    const [broadcastMessage, setBroadcastMessage] = useState('');
+
+    const handleBroadcastSubmit = (e) => {
+        e.preventDefault();
+        if (!broadcastMessage.trim()) return alert('Pesan broadcast tidak boleh kosong.');
+        onAddBroadcast(broadcastMessage);
+        setBroadcastMessage('');
+        alert('Pesan broadcast berhasil dikirim!');
+    };
+
+    return (
+        <div>
+            <h3 className="ui dividing header">Kirim Pesan Broadcast</h3>
+            <div className="ui segment">
+                <form className="ui form" onSubmit={handleBroadcastSubmit}>
+                    <div className="field">
+                        <label>Pesan untuk Semua Konsumen</label>
+                        <textarea 
+                            rows="4" 
+                            placeholder="Tulis pengumuman di sini..."
+                            value={broadcastMessage}
+                            onChange={(e) => setBroadcastMessage(e.target.value)}
+                        ></textarea>
+                    </div>
+                    <button className="ui primary button" type="submit">Kirim Pesan</button>
+                </form>
+            </div>
+        </div>
+    );
+});
+
+const SearchBarWithCart = React.memo(({ searchTerm, setSearchTerm, cartItemCount, onCartClick }) => {
+    return (
+        <div className="sticky-header" style={{ flex: 'none' }}> 
+            <div style={{display: 'flex', alignItems: 'center', gap: '10px'}}>
+                <div className="ui fluid icon input" style={{flexGrow: 1}}>
+                    <input type="text" placeholder="Cari produk..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                    <i className="search icon"></i>
+                </div>
+                <a className="item" onClick={onCartClick} style={{position: 'relative', padding: '10px'}}>
+                    <i className="cart large icon"></i>
+                    {cartItemCount > 0 && <div className="ui red circular label" style={{position:'absolute', top:'0px', right:'0px'}}>{cartItemCount}</div>}
+                </a>
+            </div>
+        </div>
+    );
+});
+
+
 function LoginPage({ onLogin, onRegister }) {
     const [isRegister, setIsRegister] = React.useState(false);
     const [email, setEmail] = React.useState('');
@@ -20,7 +97,7 @@ function LoginPage({ onLogin, onRegister }) {
     const [showSplash, setShowSplash] = React.useState(true);
 
     React.useEffect(() => {
-        const timer = setTimeout(() => setShowSplash(false), 7000);
+        const timer = setTimeout(() => setShowSplash(false), 3000);
         return () => clearTimeout(timer);
     }, []);
 
@@ -178,22 +255,16 @@ function ProfileForm({ onSave, user }) {
     );
 }
 
-function PromoCarousel({ promos }) {
-    const [isSlickReady, setIsSlickReady] = React.useState(false);
+const PromoCarousel = React.memo(({ promos }) => {
+    const carouselRef = useRef(null);
 
-    React.useEffect(() => {
-        const slickCheck = setInterval(() => {
-            if (jQuery?.fn?.slick) {
-                setIsSlickReady(true);
-                clearInterval(slickCheck);
-            }
-        }, 100);
-        return () => clearInterval(slickCheck);
-    }, []);
-    
     useEffect(() => {
-        if (isSlickReady) {
-            $('.promo-carousel').slick({
+        const $carousel = $(carouselRef.current);
+        if (jQuery?.fn?.slick && promos && promos.length > 0) {
+            if ($carousel.hasClass('slick-initialized')) {
+                $carousel.slick('unslick');
+            }
+            $carousel.slick({
                 dots: true,
                 infinite: true,
                 speed: 500,
@@ -201,22 +272,16 @@ function PromoCarousel({ promos }) {
                 autoplay: true,
                 autoplaySpeed: 3000,
                 slidesToShow: 1,
-                adaptiveHeight: true,
+                adaptiveHeight: false, // Set ke false untuk tinggi yang konsisten
                 centerMode: true,
                 centerPadding: '40px'
             });
         }
-        return () => {
-            if (jQuery?.fn?.slick && $('.promo-carousel').hasClass('slick-initialized')) {
-                $('.promo-carousel').slick('unslick');
-            }
-        };
-    }, [isSlickReady, promos]);
+    }, [promos]);
 
-
-    if (!isSlickReady || !promos || promos.length === 0) {
+    if (!promos || promos.length === 0) {
         return (
-            <div className="ui segment placeholder" style={{ margin: '2em 0' }}>
+            <div className="ui segment placeholder" style={{ margin: '2em 0', minHeight: '150px' }}>
                 <div className="line"></div>
                 <div className="line"></div>
                 <div className="line"></div>
@@ -225,7 +290,7 @@ function PromoCarousel({ promos }) {
     }
 
     return (
-        <div className="promo-carousel" style={{ margin: '2em 0' }}>
+        <div ref={carouselRef} className="promo-carousel" style={{ margin: '2em 0' }}>
             {promos.map(promo => (
                 <div key={promo.id} style={{ padding: '0 8px' }}>
                     <img src={promo.imageUrl} alt={`Promo ${promo.id}`} style={{ width: '100%', borderRadius: '8px' }} />
@@ -233,10 +298,9 @@ function PromoCarousel({ promos }) {
             ))}
         </div>
     );
-};
+});
 
-
-function AdminDashboard({ user, onLogout, onAddProduct, onAddPromo, products, promos, orders, onUpdateOrderStatus, collectors, onAssignCollector, consumers, onUpdateProduct }) {
+function AdminDashboard({ user, onLogout, onAddProduct, onAddPromo, products, promos, orders, onUpdateOrderStatus, collectors, onAssignCollector, consumers, onUpdateProduct, onAddBroadcast }) {
     const [activeItem, setActiveItem] = useState('produk');
     const [editingProduct, setEditingProduct] = useState(null);
     const [viewingBill, setViewingBill] = useState(null);
@@ -260,14 +324,12 @@ function AdminDashboard({ user, onLogout, onAddProduct, onAddPromo, products, pr
 
     const handleSaveEdit = () => {
         if (!editingProduct) return;
-
         const {firebaseDocId, ...productDataToSave} = editingProduct;
         const updatedData = {
             ...productDataToSave,
             images: productDataToSave.images.split(',').map(url => url.trim()),
             hargaModal: parseInt(productDataToSave.hargaModal)
         };
-        
         onUpdateProduct(editingProduct.id, updatedData);
         handleCloseEditModal();
     };
@@ -279,7 +341,6 @@ function AdminDashboard({ user, onLogout, onAddProduct, onAddPromo, products, pr
     function AssignCollectorDropdown({ order, collectors, onAssignCollector }) {
         const [selectedCollectorUid, setSelectedCollectorUid] = useState('');
         const [selectedCollectorName, setSelectedCollectorName] = useState('');
-
         useEffect(() => {
             if (order.assignedCollectorUid && collectors.length > 0) {
                 const assignedCol = collectors.find(c => c.uid === order.assignedCollectorUid);
@@ -316,6 +377,7 @@ function AdminDashboard({ user, onLogout, onAddProduct, onAddPromo, products, pr
     const menuItems = [
         { name: 'produk', text: 'Produk & Data', icon: 'box' },
         { name: 'order', text: 'Order', icon: 'inbox' },
+        { name: 'broadcast', text: 'Broadcast', icon: 'bullhorn' },
         { name: 'tagihan', text: 'Tagihan', icon: 'file invoice dollar' },
         { name: 'data_konsumen', text: 'Data Konsumen', icon: 'users' },
         { name: 'profile', text: 'Profil', icon: 'user' }
@@ -334,7 +396,6 @@ function AdminDashboard({ user, onLogout, onAddProduct, onAddPromo, products, pr
                         </div>
                         <h3 className="ui dividing header">Gambar Carousel</h3>
                         <PromoCarousel promos={promos} />
-
                         <h3 className="ui dividing header">Manajemen Produk & Carousel</h3>
                         <div className="ui two column stackable grid">
                             <div className="column">
@@ -355,7 +416,6 @@ function AdminDashboard({ user, onLogout, onAddProduct, onAddPromo, products, pr
                                 </form>
                             </div>
                         </div>
-
                         <h3 className="ui dividing header">Daftar Semua Produk</h3>
                         <div className={`ui ${isMobile ? 'one' : 'four'} doubling cards`}>
                             {products && products.map(product => (
@@ -375,7 +435,6 @@ function AdminDashboard({ user, onLogout, onAddProduct, onAddPromo, products, pr
                         </div>
                     </div>
                 );
-            
             case 'profile':
                 return (
                     <div>
@@ -390,37 +449,57 @@ function AdminDashboard({ user, onLogout, onAddProduct, onAddPromo, products, pr
                     </div>
                 );
             case 'order':
+                const sortedOrders = [...orders].sort((a, b) => {
+                    const dateA = parseIndonesianDate(a.date);
+                    const dateB = parseIndonesianDate(b.date);
+                    if (!dateA || !dateB) return 0;
+                    return dateB - dateA;
+                });
+                let lastDate = null;
                 return (
                     <div>
-                        <h3 className="ui dividing header">Manajemen Pesanan</h3>
-                        <div className="ui relaxed divided list">
-                            {orders && orders.map(order => {
-                                const consumerProfile = consumers && consumers.find(c => c.email === order.consumerEmail);
-                                const salesName = consumerProfile ? consumerProfile.namaSales : 'N/A';
-                                return (
-                                    <div className="item" key={order.id}>
-                                        <div className="right floated content" style={{display: 'flex', alignItems: 'center'}}>
-                                            {order.status === 'Proses' && <button className="ui small blue button" onClick={() => onUpdateOrderStatus(order.id, 'Pengiriman')}>Kirim</button>}
-                                            {order.status === 'Pengiriman' && <button className="ui small teal button" onClick={() => onUpdateOrderStatus(order.id, 'Terkirim')}>Terkirim</button>}
-                                            {order.status === 'Terkirim' && <AssignCollectorDropdown order={order} collectors={collectors} onAssignCollector={onAssignCollector} />}
-                                        </div>
-                                        <div className="content">
-                                            <div className="header">{order.productName} ({order.id})</div>
-                                            <div className="description">
-                                                Pemesan: <strong>{consumerProfile ? consumerProfile.namaLengkap : order.consumerName}</strong> | Tenor: <strong>{order.tenor} hari</strong> | Sales: <strong>{salesName}</strong>
-                                                <br/>
-                                                Angsuran: <strong>Rp {order.installmentPrice.toLocaleString('id-ID')} / {order.paymentFrequency === 'mingguan' ? 'minggu' : 'hari'}</strong>
+                        <h3 className="ui dividing header">Semua Pesanan (Terbaru di Atas)</h3>
+                        {sortedOrders.length === 0 ? (
+                            <p>Belum ada pesanan.</p>
+                        ) : (
+                            <div className="ui relaxed divided list">
+                                {sortedOrders.map(order => {
+                                    const currentDate = order.date;
+                                    let dateHeader = null;
+                                    if (currentDate !== lastDate) {
+                                        dateHeader = <h4 className="ui horizontal header divider" style={{marginTop: '2em'}}>{currentDate}</h4>;
+                                        lastDate = currentDate;
+                                    }
+                                    const consumerProfile = consumers.find(c => c.email === order.consumerEmail);
+                                    const salesName = consumerProfile ? consumerProfile.namaSales : 'N/A';
+                                    return (
+                                        <React.Fragment key={order.id}>
+                                            {dateHeader}
+                                            <div className="item">
+                                                <div className="right floated content" style={{display: 'flex', alignItems: 'center'}}>
+                                                    {order.status === 'Proses' && <button className="ui small blue button" onClick={() => onUpdateOrderStatus(order.id, 'Pengiriman')}>Kirim</button>}
+                                                    {order.status === 'Pengiriman' && <button className="ui small teal button" onClick={() => onUpdateOrderStatus(order.id, 'Terkirim')}>Terkirim</button>}
+                                                    {order.status === 'Terkirim' && <AssignCollectorDropdown order={order} collectors={collectors} onAssignCollector={onAssignCollector} />}
+                                                </div>
+                                                <div className="content">
+                                                    <div className="header">{order.productName} ({order.id})</div>
+                                                    <div className="description">
+                                                        Pemesan: <strong>{consumerProfile ? consumerProfile.namaLengkap : order.consumerName}</strong> | Sales: <strong>{salesName}</strong>
+                                                    </div>
+                                                    <div className="extra" style={{marginTop: '5px'}}>
+                                                        {renderStatusLabel(order.status)}
+                                                    </div>
+                                                </div>
                                             </div>
-                                            <div className="extra" style={{marginTop: '5px'}}>
-                                                {order.date} - {renderStatusLabel(order.status)}
-                                            </div>
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
+                                        </React.Fragment>
+                                    );
+                                })}
+                            </div>
+                        )}
                     </div>
                 );
+            case 'broadcast':
+                 return <BroadcastForm onAddBroadcast={onAddBroadcast} />;
             case 'tagihan':
                 const activeBills = orders && orders.filter(o => o.status === 'Terkirim');
                 const filteredBills = activeBills && activeBills.filter(bill =>
@@ -500,13 +579,15 @@ function AdminDashboard({ user, onLogout, onAddProduct, onAddPromo, products, pr
     return (
         <React.Fragment>
             <Layout>
-                {isMobile ? ( 
-                    <div className="ui container" style={{paddingTop: '1em'}}><div className="ui attached segment mobile-content-padding">{renderContent()}</div></div> 
-                ) : (
-                    <div className="ui container" style={{paddingTop: '1em'}}>
-                        <div className="ui grid">
-                            <div className="four wide column">
-                                <div className="ui vertical fluid pointing menu">
+                <div className={`ui grid full-height-grid`} style={{margin: 0}}>
+                    {isMobile ? ( 
+                        <div className="sixteen wide column" style={{padding: '1em'}}>
+                            <div className="ui attached segment mobile-content-padding">{renderContent()}</div>
+                        </div>
+                    ) : (
+                        <React.Fragment>
+                            <div className="four wide column" style={{padding: 0}}>
+                                <div className="ui vertical fluid pointing menu" style={{height: '100%', borderRadius: 0}}>
                                     {menuItems.map(item => (
                                         <a key={item.name} className={activeItem === item.name ? 'active teal item' : 'item'} onClick={() => setActiveItem(item.name)}>
                                             <i className={`${item.icon} icon`}></i> {item.text}
@@ -517,17 +598,16 @@ function AdminDashboard({ user, onLogout, onAddProduct, onAddPromo, products, pr
                             <div className="twelve wide stretched column">
                                 <div className="ui segment">{renderContent()}</div>
                             </div>
-                        </div>
-                    </div>
-                )}
+                        </React.Fragment>
+                    )}
+                </div>
             </Layout>
             
             {isMobile && (
-                <div className="ui bottom fixed five item icon menu">
+                <div className="ui bottom fixed six item icon menu">
                     {menuItems.map(item => (
                         <a key={item.name} className={activeItem === item.name ? 'active teal item' : 'item'} onClick={() => setActiveItem(item.name)}>
                             <i className={`${item.icon} icon`}></i>
-                            <span style={{fontSize:'0.8em'}}>{item.text}</span>
                         </a>
                     ))}
                 </div>
@@ -574,9 +654,9 @@ function AdminDashboard({ user, onLogout, onAddProduct, onAddPromo, products, pr
                             <p><strong>Konsumen:</strong> {viewingBill.consumerName}</p>
                             <p><strong>Penagih:</strong> {viewingBill.assignedCollector || 'Belum ada'}</p>
                             <p><strong>Angsuran:</strong> Rp {viewingBill.installmentPrice.toLocaleString('id-ID')} / {viewingBill.paymentFrequency === 'mingguan' ? 'minggu' : 'hari'}</p>
-                            <div className="ui teal progress" data-value={viewingBill.payments.length} data-total={viewingBill.tenor}>
+                            <div className="ui teal progress" data-value={(viewingBill.payments || []).length} data-total={viewingBill.tenor}>
                                 <div className="bar"><div className="progress"></div></div>
-                                <div className="label">Terbayar {viewingBill.payments.length} dari {viewingBill.tenor} hari</div>
+                                <div className="label">Terbayar {(viewingBill.payments || []).length} dari {viewingBill.tenor} hari</div>
                             </div>
                             <h4 className="ui dividing header">Riwayat Pembayaran</h4>
                             {viewingBill.payments && viewingBill.payments.length === 0 ? <p>Belum ada pembayaran.</p> : (
@@ -604,8 +684,14 @@ function AdminDashboard({ user, onLogout, onAddProduct, onAddPromo, products, pr
 
 function KolektorDashboard({ user, onLogout, orders, onDailyPayment, consumers }) {
     const [activeItem, setActiveItem] = useState('tagihan');
+    const [searchTerm, setSearchTerm] = useState('');
+    const [viewingBill, setViewingBill] = useState(null);
     const size = useWindowSize();
     const isMobile = size.width < 768;
+
+    const myActiveBills = orders ? orders.filter(order =>
+        order.assignedCollectorUid === user.uid && order.status !== 'Lunas'
+    ) : [];
 
     const menuItems = [
         { name: 'tagihan', text: 'Daftar Tagihan', icon: 'list alternate outline' },
@@ -616,48 +702,32 @@ function KolektorDashboard({ user, onLogout, orders, onDailyPayment, consumers }
     const renderContent = () => {
         switch(activeItem) {
             case 'tagihan':
-                const myActiveBills = orders && orders.filter(order =>
-                    order.assignedCollectorUid === user.uid &&
-                    order.status !== 'Lunas'
-                );
+                const filteredBills = myActiveBills.filter(bill => {
+                    const consumerData = consumers.find(c => c.email === bill.consumerEmail);
+                    const consumerName = consumerData ? consumerData.namaLengkap : bill.consumerName;
+                    return consumerName.toLowerCase().includes(searchTerm.toLowerCase());
+                });
+
                 return (
                     <div>
                         <h3 className="ui dividing header">Daftar Tagihan Anda</h3>
-                        {myActiveBills && myActiveBills.length === 0 ? <p>Tidak ada tagihan yang ditugaskan untuk Anda.</p> : (
-                            <div className="ui cards">
-                                {myActiveBills && myActiveBills.map(bill => {
-                                    const consumerData = consumers && consumers.find(c => c.email === bill.consumerEmail);
+                        <div className="ui fluid icon input" style={{marginBottom: '1em'}}>
+                            <input type="text" placeholder="Cari nama konsumen..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                            <i className="search icon"></i>
+                        </div>
+                        {filteredBills.length === 0 ? <p>Tidak ada tagihan yang cocok.</p> : (
+                            <div className="ui selection relaxed divided list">
+                                {filteredBills.map(bill => {
+                                    const consumerData = consumers.find(c => c.email === bill.consumerEmail);
                                     return (
-                                        <div className="card" key={bill.id}>
-                                            <div className="content">
-                                                <div className="header">{bill.productName}</div>
-                                                <div className="meta">ID Pesanan: {bill.id}</div>
-                                                <div className="description">
-                                                    <strong>Info Konsumen:</strong>
-                                                    <div>{consumerData ? consumerData.namaLengkap : bill.consumerName}</div>
-                                                    <div>{consumerData ? consumerData.alamatUsaha : 'N/A'}</div>
-                                                    <div>{consumerData ? consumerData.noHape : 'N/A'}</div>
-                                                </div>
-                                                <div className="description" style={{ marginTop: '1em' }}>
-                                                    <strong>Info Tagihan:</strong>
-                                                    <div>Angsuran: Rp {bill.installmentPrice.toLocaleString('id-ID')} / {bill.paymentFrequency === 'mingguan' ? 'minggu' : 'hari'}</div>
-                                                    <div>Terbayar: {bill.payments.length} dari {bill.tenor} hari</div>
-                                                    {bill.status === 'Lunas' && (
-                                                        <div style={{marginTop: '0.5em'}}>
-                                                            <span className="ui green label"><i className="check icon"></i> Lunas</span>
-                                                        </div>
-                                                    )}
-                                                </div>
+                                        <div className="item" key={bill.id} onClick={() => setViewingBill(bill)} style={{cursor: 'pointer'}}>
+                                            <div className="right floated content">
+                                                <button className="ui mini button">Lihat Detail</button>
                                             </div>
-                                            {bill.status !== 'Lunas' ? (
-                                                <div className="ui bottom attached green button" onClick={() => onDailyPayment(bill.id)}>
-                                                    <i className="check icon"></i> Konfirmasi Bayar
-                                                </div>
-                                            ) : (
-                                                <div className="ui bottom attached green button disabled">
-                                                    <i className="check icon"></i> Lunas
-                                                </div>
-                                            )}
+                                            <div className="content">
+                                                <div className="header">{consumerData ? consumerData.namaLengkap : bill.consumerName}</div>
+                                                <div className="description">{bill.productName}</div>
+                                            </div>
                                         </div>
                                     );
                                 })}
@@ -666,17 +736,17 @@ function KolektorDashboard({ user, onLogout, orders, onDailyPayment, consumers }
                     </div>
                 );
             case 'riwayat':
-                const myPaymentHistory = orders && orders.flatMap(order => 
+                const myPaymentHistory = orders ? orders.flatMap(order => 
                     (order.payments || [])
-                        .filter(p => p.collectedBy === user.name)
+                        .filter(p => p.collectedBy === user.name || p.collectedBy === user.email)
                         .map(p => ({ ...p, orderId: order.id, consumerName: order.consumerName }))
-                ).reverse();
+                ).reverse() : [];
                 return (
                     <div>
                         <h3 className="ui dividing header">Riwayat Penagihan Berhasil</h3>
-                        {myPaymentHistory && myPaymentHistory.length === 0 ? <p>Anda belum memiliki riwayat penagihan.</p> : (
+                        {myPaymentHistory.length === 0 ? <p>Anda belum memiliki riwayat penagihan.</p> : (
                             <div className="ui relaxed divided list">
-                                {myPaymentHistory && myPaymentHistory.map((payment, index) => (
+                                {myPaymentHistory.map((payment, index) => (
                                     <div className="item" key={index}>
                                         <i className="large money bill alternate middle aligned icon"></i>
                                         <div className="content">
@@ -692,13 +762,32 @@ function KolektorDashboard({ user, onLogout, orders, onDailyPayment, consumers }
                     </div>
                 );
             case 'profil':
+                const todayString = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+                const paidTodayCount = myActiveBills.filter(bill => 
+                    (bill.payments || []).some(p => p.date === todayString)
+                ).length;
+                const notPaidTodayCount = myActiveBills.length - paidTodayCount;
+
                 return (
                     <div>
-                        <h3 className="ui dividing header">Profil Saya</h3>
+                        <h3 className="ui dividing header">Profil & Statistik Harian</h3>
                         <div className="ui segment">
                             <p><strong>Nama:</strong> {user.name || user.email}</p>
-                            <p>Halaman ini akan berisi informasi dan statistik performa Anda sebagai kolektor.</p>
-                            <button className="ui red button" onClick={onLogout}>
+                            <div className={`ui ${isMobile ? 'three' : ''} statistics`}>
+                                <div className="ui statistic">
+                                    <div className="value">{myActiveBills.length}</div>
+                                    <div className="label">Total Tagihan Aktif</div>
+                                </div>
+                                <div className="ui green statistic">
+                                    <div className="value">{paidTodayCount}</div>
+                                    <div className="label">Sudah Bayar Hari Ini</div>
+                                </div>
+                                <div className="ui red statistic">
+                                    <div className="value">{notPaidTodayCount}</div>
+                                    <div className="label">Belum Bayar Hari Ini</div>
+                                </div>
+                            </div>
+                             <button className="ui red button" style={{marginTop: '1.5em'}} onClick={onLogout}>
                                 <i className="sign out icon"></i> Logout
                             </button>
                         </div>
@@ -708,32 +797,83 @@ function KolektorDashboard({ user, onLogout, orders, onDailyPayment, consumers }
         }
     };
 
-    const Layout = ({children}) => ( <div>{children}</div> );
-
-    return (
-        <Layout>
-            {isMobile ? (
-                <div className="ui container" style={{paddingTop: '1em'}}><div className="ui attached segment mobile-content-padding">{renderContent()}</div></div>
-            ) : (
-                <div className="ui container" style={{paddingTop: '1em'}}>
-                    <div className="ui grid">
-                        <div className="four wide column">
-                            <div className="ui vertical fluid pointing menu">
-                                {menuItems.map(item => (<a key={item.name} className={activeItem === item.name ? 'active teal item' : 'item'} onClick={() => setActiveItem(item.name)}><i className={`${item.icon} icon`}></i> {item.text}</a>))}
+    const Layout = ({children}) => ( 
+        <React.Fragment>
+            {children}
+            {viewingBill && (
+                 <div className="ui dimmer modals page transition visible active" style={{display: 'flex !important'}}>
+                    <div className="ui standard modal transition visible active">
+                        <i className="close icon" onClick={() => setViewingBill(null)}></i>
+                        <div className="header">Detail Tagihan</div>
+                        <div className="content">
+                            <div className="ui card" style={{width: '100%'}}>
+                                <div className="content">
+                                    <div className="header">{viewingBill.productName}</div>
+                                    <div className="meta">ID Pesanan: {viewingBill.id}</div>
+                                    <div className="description">
+                                        <strong>Info Konsumen:</strong>
+                                        <div>{consumers.find(c => c.email === viewingBill.consumerEmail)?.namaLengkap || viewingBill.consumerName}</div>
+                                        <div>{consumers.find(c => c.email === viewingBill.consumerEmail)?.alamatUsaha || 'N/A'}</div>
+                                        <div>{consumers.find(c => c.email === viewingBill.consumerEmail)?.noHape || 'N/A'}</div>
+                                    </div>
+                                    <div className="description" style={{ marginTop: '1em' }}>
+                                        <strong>Info Tagihan:</strong>
+                                        <div>Angsuran: Rp {viewingBill.installmentPrice.toLocaleString('id-ID')} / {viewingBill.paymentFrequency === 'mingguan' ? 'minggu' : 'hari'}</div>
+                                        <div>Terbayar: {(viewingBill.payments || []).length} dari {viewingBill.tenor} hari</div>
+                                        {viewingBill.status === 'Lunas' && (
+                                            <div style={{marginTop: '0.5em'}}>
+                                                <span className="ui green label"><i className="check icon"></i> Lunas</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                                {viewingBill.status !== 'Lunas' ? (
+                                    <div className="ui bottom attached green button" onClick={() => { onDailyPayment(viewingBill.id); setViewingBill(null); }}>
+                                        <i className="check icon"></i> Konfirmasi Bayar
+                                    </div>
+                                ) : (
+                                    <div className="ui bottom attached green button disabled">
+                                        <i className="check icon"></i> Lunas
+                                    </div>
+                                )}
                             </div>
                         </div>
-                        <div className="twelve wide stretched column"><div className="ui segment">{renderContent()}</div></div>
                     </div>
                 </div>
             )}
-            <div className="ui bottom fixed three item icon menu">
-                {menuItems.map(item => (<a key={item.name} className={activeItem === item.name ? 'active teal item' : 'item'} onClick={() => setActiveItem(item.name)}><i className={`${item.icon} icon`}></i><span style={{fontSize:'0.8em'}}>{item.text}</span></a>))}
+        </React.Fragment>
+    );
+
+    return (
+        <Layout>
+            <div className={`ui grid full-height-grid ${isMobile ? 'container' : ''}`} style={{marginTop: 0, paddingTop: isMobile ? '1em' : 0}}>
+                {isMobile ? (
+                    <div className="sixteen wide column">
+                         <div className="ui attached segment mobile-content-padding">{renderContent()}</div>
+                    </div>
+                ) : (
+                    <React.Fragment>
+                        <div className="four wide column">
+                            <div className="ui vertical fluid pointing menu" style={{height: '100%', borderRadius: 0}}>
+                                {menuItems.map(item => (<a key={item.name} className={activeItem === item.name ? 'active teal item' : 'item'} onClick={() => setActiveItem(item.name)}><i className={`${item.icon} icon`}></i> {item.text}</a>))}
+                            </div>
+                        </div>
+                        <div className="twelve wide stretched column">
+                            <div className="ui segment">{renderContent()}</div>
+                        </div>
+                    </React.Fragment>
+                )}
             </div>
+            {isMobile && (
+                <div className="ui bottom fixed three item icon menu">
+                    {menuItems.map(item => (<a key={item.name} className={activeItem === item.name ? 'active teal item' : 'item'} onClick={() => setActiveItem(item.name)}><i className={`${item.icon} icon`}></i><span style={{fontSize:'0.8em'}}>{item.text}</span></a>))}
+                </div>
+            )}
         </Layout>
     );
 }
 
-function KonsumenDashboard({ user, onLogout, products, orders, onNewOrder, promos, onSaveProfile }) {
+function KonsumenDashboard({ user, onLogout, products, orders, onNewOrder, promos, broadcasts, onSaveProfile }) {
     const [profileData, setProfileData] = useState(null);
     const [activeItem, setActiveItem] = useState('produk');
     const [selectedProduct, setSelectedProduct] = useState(null);
@@ -744,7 +884,33 @@ function KonsumenDashboard({ user, onLogout, products, orders, onNewOrder, promo
     const [paymentFrequency, setPaymentFrequency] = useState('harian');
     const [showCheckoutModal, setShowCheckoutModal] = useState(false);
     const [selectedAddress, setSelectedAddress] = useState('rumah');
+    const [viewingBill, setViewingBill] = useState(null);
 
+    const prevOrders = usePrevious(orders);
+
+    useEffect(() => {
+        if (prevOrders && orders) {
+            const todayString = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+            
+            const myNewOrders = orders.filter(order => order.userId === user.uid);
+            const myPrevOrders = prevOrders.filter(order => order.userId === user.uid);
+
+            myNewOrders.forEach(newOrder => {
+                const oldOrder = myPrevOrders.find(o => o.id === newOrder.id);
+                if (oldOrder) {
+                    const newPayments = newOrder.payments || [];
+                    const oldPayments = oldOrder.payments || [];
+                    if (newPayments.length > oldPayments.length) {
+                        const lastPayment = newPayments[newPayments.length - 1];
+                        if (lastPayment.date === todayString) {
+                            alert(`Pembayaran untuk pesanan ${newOrder.productName} (${newOrder.id}) telah berhasil diterima hari ini.`);
+                        }
+                    }
+                }
+            });
+        }
+    }, [orders, user.uid, prevOrders]);
+    
     const size = useWindowSize();
     const isMobile = size.width < 768;
     const tenorOptions = [ { days: 60, multiplier: 1.20 }, { days: 90, multiplier: 1.25 }, { days: 120, multiplier: 1.30 }, { days: 150, multiplier: 1.35 }, { days: 180, multiplier: 1.40 } ];
@@ -772,10 +938,12 @@ function KonsumenDashboard({ user, onLogout, products, orders, onNewOrder, promo
     }, [user]);
 
     useEffect(() => {
-        if ($('.ui.progress').length) {
-            setTimeout(() => $('.ui.progress').progress(), 50);
+        if (viewingBill && $('.ui.progress').length) {
+            setTimeout(() => {
+                $('.ui.progress').progress();
+            }, 50);
         }
-    }, [orders]);
+    }, [viewingBill]);
 
     if (!profileData || !profileData.namaLengkap || !profileData.noHape) { 
         return <ProfileForm onSave={(data) => { setProfileData(data); onSaveProfile(data); }} user={user} />;
@@ -918,6 +1086,25 @@ function KonsumenDashboard({ user, onLogout, products, orders, onNewOrder, promo
                         )}
                     </div>
                 );
+            case 'pemberitahuan':
+                return (
+                    <div>
+                        <h2 className="ui header"><i className="bell icon"></i>Pemberitahuan</h2>
+                        {broadcasts && broadcasts.length === 0 ? <p>Tidak ada pemberitahuan baru.</p> : (
+                            <div className="ui relaxed divided list">
+                                {broadcasts.map(msg => (
+                                    <div className="item" key={msg.id}>
+                                        <i className="large bullhorn middle aligned icon"></i>
+                                        <div className="content">
+                                            <div className="description">{msg.message}</div>
+                                            <div className="meta">{new Date(msg.timestamp?.toDate()).toLocaleString('id-ID')}</div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                );
             case 'profile':
                 return (
                     <div>
@@ -933,29 +1120,31 @@ function KonsumenDashboard({ user, onLogout, products, orders, onNewOrder, promo
                             </button>
                         </div>
                         <h3 className="ui dividing header">Tagihan Berjalan</h3>
-                        {activeBills && activeBills.length === 0 ? <p>Tidak ada tagihan aktif.</p> : activeBills.map(bill => (
-                            <div className="ui segment" key={bill.id}>
-                                <h4 className="ui header">{bill.productName} ({bill.id})</h4>
-                                {bill.assignedCollector && <p>Penagih: <strong>{bill.assignedCollector}</strong></p>}
-                                <div className="ui teal progress" data-value={bill.payments.length} data-total={bill.tenor}>
-                                    <div className="bar"><div className="progress"></div></div>
-                                    <div className="label">Bayar {bill.payments.length} dari {bill.tenor} hari</div>
-                                </div>
-                                <p>Angsuran: <strong>Rp {bill.installmentPrice.toLocaleString('id-ID')} / {bill.paymentFrequency === 'mingguan' ? 'minggu' : 'hari'}</strong></p>
-                                {bill.status === 'Lunas' && (
-                                    <div style={{marginTop: '0.5em'}}>
-                                        <span className="ui green label"><i className="check icon"></i> Lunas</span>
+                        {activeBills && activeBills.length === 0 ? <p>Tidak ada tagihan aktif.</p> : (
+                            <div className="ui selection list">
+                                {activeBills.map(bill => (
+                                    <div className="item" key={bill.id} onClick={() => setViewingBill(bill)} style={{cursor: 'pointer'}}>
+                                        <div className="right floated content"><i className="chevron right icon"></i></div>
+                                        <div className="content">
+                                            <div className="header">{bill.productName}</div>
+                                            <div className="description">Angsuran Rp {bill.installmentPrice.toLocaleString('id-ID')} / {bill.paymentFrequency === 'mingguan' ? 'minggu' : 'hari'}</div>
+                                        </div>
                                     </div>
-                                )}
+                                ))}
                             </div>
-                        ))}
+                        )}
                     </div>
                 );
             default: return <div>Pilih menu</div>;
         }
     };
     
-    const menuItems = [ { name: 'produk', icon: 'shopping bag', text: 'Produk' }, { name: 'order', icon: 'history', text: 'Order' }, { name: 'profile', icon: 'user circle', text: 'Profil' } ];
+    const menuItems = [ 
+        { name: 'produk', icon: 'shopping bag', text: 'Produk' }, 
+        { name: 'order', icon: 'history', text: 'Order' }, 
+        { name: 'pemberitahuan', icon: 'bell', text: 'Notif' },
+        { name: 'profile', icon: 'user circle', text: 'Profil' } 
+    ];
     
     let installmentPrice = 0;
     if (selectedProduct) {
@@ -965,51 +1154,37 @@ function KonsumenDashboard({ user, onLogout, products, orders, onNewOrder, promo
             installmentPrice = paymentFrequency === 'mingguan' ? Math.ceil(hargaHarian) * 6 : Math.ceil(hargaHarian);
         }
     }
-
-    const Layout = ({children}) => ( <div>{children}</div> );
-    
-    const SearchBarWithCart = () => (
-         <div style={{display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '1em'}}>
-            <div className="ui fluid icon input" style={{flexGrow: 1}}>
-                <input type="text" placeholder="Cari produk..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /><i className="search icon"></i>
-            </div>
-            <a className="item" onClick={() => setActiveItem('keranjang')} style={{position: 'relative', padding: '10px'}}>
-                <i className="cart large icon"></i>
-                {cartItems.length > 0 && <div className="ui red circular label" style={{position:'absolute', top:'0px', right:'0px'}}>{cartItems.length}</div>}
-            </a>
-        </div>
-    );
     
     return (
         <React.Fragment>
-            <Layout>
+            <div className={`ui grid full-height-grid ${isMobile ? 'container' : ''}`} style={{marginTop: 0, paddingTop: isMobile ? '1em' : 0}}>
                 {isMobile ? (
-                    <div className="ui container" style={{paddingTop: '1em'}}>
-                        {activeItem === 'produk' && <SearchBarWithCart />}
+                    <div className="sixteen wide column">
+                        {activeItem === 'produk' && <SearchBarWithCart searchTerm={searchTerm} setSearchTerm={setSearchTerm} cartItemCount={cartItems.length} onCartClick={() => setActiveItem('keranjang')} />}
                         <div className="ui attached segment mobile-content-padding">
                             {renderContent()}
                         </div>
                     </div>
                 ) : (
-                    <div className="ui container" style={{paddingTop: '1em'}}>
-                        <div className="ui grid">
-                            <div className="four wide column">
-                                <div className="ui vertical fluid pointing menu">
-                                    {menuItems.map(item => (<a key={item.name} className={activeItem === item.name ? 'active teal item' : 'item'} onClick={() => setActiveItem(item.name)}><i className={`${item.icon} icon`}></i> {item.text}</a>))}
-                                </div>
-                            </div>
-                            <div className="twelve wide stretched column">
-                                {activeItem === 'produk' && <SearchBarWithCart />}
-                                <div className="ui segment">{renderContent()}</div>
+                    <React.Fragment>
+                        <div className="four wide column">
+                            <div className="ui vertical fluid pointing menu" style={{height: '100%', borderRadius: 0}}>
+                                {menuItems.map(item => (<a key={item.name} className={activeItem === item.name ? 'active teal item' : 'item'} onClick={() => setActiveItem(item.name)}><i className={`${item.icon} icon`}></i> {item.text}</a>))}
                             </div>
                         </div>
-                    </div>
+                        <div className="twelve wide stretched column">
+                            {activeItem === 'produk' && <SearchBarWithCart searchTerm={searchTerm} setSearchTerm={setSearchTerm} cartItemCount={cartItems.length} onCartClick={() => setActiveItem('keranjang')} />}
+                            <div className="ui segment">{renderContent()}</div>
+                        </div>
+                    </React.Fragment>
                 )}
-            </Layout>
-            
-            <div className="ui bottom fixed three item icon menu">
-                {menuItems.map(item => (<a key={item.name} className={activeItem === item.name ? 'active teal item' : 'item'} onClick={() => setActiveItem(item.name)}><i className={`${item.icon} icon`}></i><span style={{fontSize: '0.8em'}}>{item.text}</span></a>))}
             </div>
+            
+            {isMobile && (
+                <div className="ui bottom fixed four item icon menu">
+                    {menuItems.map(item => (<a key={item.name} className={activeItem === item.name ? 'active teal item' : 'item'} onClick={() => setActiveItem(item.name)}><i className={`${item.icon} icon`}></i><span style={{fontSize: '0.8em'}}>{item.text}</span></a>))}
+                </div>
+            )}
             
             {selectedProduct && 
                 <div className={`ui dimmer modals page transition visible active`} style={{display: 'flex !important', zIndex: 1001}}>
@@ -1097,6 +1272,36 @@ function KonsumenDashboard({ user, onLogout, products, orders, onNewOrder, promo
                     </div>
                 </div>
             )}
+            {viewingBill && (
+                <div className={`ui dimmer modals page transition visible active`} style={{display: 'flex !important', zIndex: 1001}}>
+                    <div className={`ui standard modal transition visible active`}>
+                        <i className="close icon" onClick={() => setViewingBill(null)}></i>
+                        <div className="header">Detail Tagihan: {viewingBill.productName}</div>
+                        <div className="content">
+                            <div className="ui teal progress" data-value={(viewingBill.payments || []).length} data-total={viewingBill.tenor}>
+                                <div className="bar"><div className="progress"></div></div>
+                                <div className="label">Terbayar {(viewingBill.payments || []).length} dari {viewingBill.tenor} angsuran</div>
+                            </div>
+                            <h4 className="ui dividing header">Riwayat Pembayaran</h4>
+                            {(viewingBill.payments && viewingBill.payments.length > 0) ? (
+                                <div style={{maxHeight: '200px', overflowY: 'auto'}}>
+                                    <table className="ui celled table">
+                                        <thead><tr><th>Angsuran Ke-</th><th>Tanggal</th></tr></thead>
+                                        <tbody>
+                                            {viewingBill.payments.map((payment, index) => (
+                                                <tr key={index}><td>{index + 1}</td><td>{payment.date}</td></tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            ) : <p>Belum ada riwayat pembayaran.</p>}
+                        </div>
+                        <div className="actions">
+                            <button className="ui button" onClick={() => setViewingBill(null)}>Tutup</button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </React.Fragment>
     );
 }
@@ -1125,25 +1330,29 @@ function App() {
     const [promos, setPromos] = useState([]);
     const [collectors, setCollectors] = useState([]);
     const [consumers, setConsumers] = useState([]);
+    const [broadcasts, setBroadcasts] = useState([]);
 
     useEffect(() => {
         const defaultPromos = [
-            { id: 'promo1', imageUrl: 'https://images2.imgbox.com/d8/21/CaAGurXT_o.jpeg' },
-            { id: 'promo2', imageUrl: 'https://images2.imgbox.com/bc/6e/auiVPjLj_o.jpeg' },
-            { id: 'promo3', imageUrl: 'https://images2.imgbox.com/d8/21/CaAGurXT_o.jpeg' }
+            { id: 'promo1', imageUrl: 'https://images2.imgbox.com/bc/6e/auiVPjLj_o.jpeg' },
+            { id: 'promo2', imageUrl: 'https://images2.imgbox.com/d8/21/CaAGurXT_o.jpeg' },
+            { id: 'promo3', imageUrl: 'https://images2.imgbox.com/0b/9f/0VQPgf9E_o.jpeg' }
         ];
 
         const seedPromos = async () => {
-            const promosRef = db.collection('promos');
-            const snapshot = await promosRef.limit(1).get();
-
-            if (snapshot.empty) {
-                const batch = db.batch();
-                defaultPromos.forEach(promo => {
-                    const docRef = promosRef.doc();
-                    batch.set(docRef, promo);
-                });
-                await batch.commit();
+            try {
+                const promosRef = db.collection('promos');
+                const snapshot = await promosRef.limit(1).get();
+                if (snapshot.empty) {
+                    const batch = db.batch();
+                    defaultPromos.forEach(promo => {
+                        const docRef = promosRef.doc();
+                        batch.set(docRef, promo);
+                    });
+                    await batch.commit();
+                }
+            } catch (error) {
+                console.error("Error seeding promos:", error);
             }
         };
 
@@ -1188,6 +1397,11 @@ function App() {
             const fetchedConsumers = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() }));
             setConsumers(fetchedConsumers);
         }, error => console.error("Error fetching consumers: ", error));
+        
+        const unsubscribeBroadcasts = db.collection('broadcasts').orderBy('timestamp', 'desc').onSnapshot(snapshot => {
+            const fetchedBroadcasts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setBroadcasts(fetchedBroadcasts);
+        }, error => console.error("Error fetching broadcasts: ", error));
 
         return () => {
             unsubscribeAuth();
@@ -1196,42 +1410,54 @@ function App() {
             unsubscribePromos();
             unsubscribeCollectors();
             unsubscribeConsumers();
+            unsubscribeBroadcasts();
         };
     }, []);
 
-    const handleRegister = async (email, password) => {
+    const handleRegister = useCallback(async (email, password) => {
         try {
             const { user: authUser } = await auth.createUserWithEmailAndPassword(email, password);
             await db.collection('users').doc(authUser.uid).set({ email: email, role: 'konsumen', name: email, namaLengkap: email });
             alert('Registrasi berhasil!');
         } catch (error) { alert(`Registrasi Gagal: ${error.message}`); console.error("Register Error:", error); }
-    };
+    }, []);
 
-    const handleLogin = async (email, password) => {
+    const handleLogin = useCallback(async (email, password) => {
         try { await auth.signInWithEmailAndPassword(email, password); } catch (error) { alert(`Login Gagal: ${error.message}`); console.error("Login Error:", error); }
-    };
+    }, []);
     
-    const handleLogout = () => auth.signOut();
+    const handleLogout = useCallback(() => auth.signOut(), []);
     
-    const handleAddProduct = async (productData) => {
+    const handleAddProduct = useCallback(async (productData) => {
         try {
             await db.collection('products').add(productData);
             alert("Produk berhasil ditambahkan!");
         } catch (error) { console.error("Error adding product: ", error); alert("Gagal menambahkan produk."); }
-    };
+    }, []);
 
-    const handleAddPromo = async (promoData) => {
+    const handleAddPromo = useCallback(async (promoData) => {
         try {
             await db.collection('promos').add(promoData);
             alert("Gambar Carousel berhasil ditambahkan!");
         } catch (error) { console.error("Error adding promo: ", error); alert("Gagal menambahkan Gambar Carousel."); }
-    };
+    }, []);
 
-    const handleUpdateOrderStatus = async (orderId, newStatus) => {
+    const handleAddBroadcast = useCallback(async (message) => {
+        try {
+            await db.collection('broadcasts').add({
+                message: message,
+                timestamp: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        } catch (error) {
+            console.error("Error adding broadcast: ", error);
+            alert("Gagal mengirim broadcast.");
+        }
+    }, []);
+    
+    const handleUpdateOrderStatus = useCallback(async (orderId, newStatus) => {
         try {
             const orderDocQuery = db.collection('orders').where('id', '==', orderId).limit(1);
             const snapshot = await orderDocQuery.get();
-
             if (!snapshot.empty) {
                 const docId = snapshot.docs[0].id;
                 await db.collection('orders').doc(docId).update({ status: newStatus });
@@ -1240,13 +1466,12 @@ function App() {
                 alert("Order tidak ditemukan!");
             }
         } catch (error) { console.error("Error updating order status: ", error); alert("Gagal memperbarui status order."); }
-    };
+    }, []);
 
-    const handleAssignCollector = async (orderId, collectorName, collectorUid) => {
+    const handleAssignCollector = useCallback(async (orderId, collectorName, collectorUid) => {
         try {
             const orderDocQuery = db.collection('orders').where('id', '==', orderId).limit(1);
             const snapshot = await orderDocQuery.get();
-
             if (!snapshot.empty) {
                 const docId = snapshot.docs[0].id;
                 await db.collection('orders').doc(docId).update({ 
@@ -1257,103 +1482,70 @@ function App() {
             } else {
                 alert("Order tidak ditemukan!");
             }
-        } catch (error) { 
-            console.error("Error assigning collector: ", error); 
-            alert("Gagal menugaskan kolektor."); 
-        }
-    };
+        } catch (error) { console.error("Error assigning collector: ", error); alert("Gagal menugaskan kolektor."); }
+    }, []);
 
-    const handleNewOrder = async (newOrdersArray) => {
+    const handleNewOrder = useCallback(async (newOrdersArray) => {
         try {
             const batch = db.batch();
             newOrdersArray.forEach(order => {
                 const docRef = db.collection('orders').doc();
-                batch.set(docRef, {
-                    ...order,
-                    consumerName: user.namaLengkap || user.email,
-                    consumerEmail: user.email,
-                    userId: user.uid
-                });
+                batch.set(docRef, { ...order, consumerName: user.namaLengkap || user.email, consumerEmail: user.email, userId: user.uid });
             });
             await batch.commit();
-        } catch (error) {
-            console.error("Error creating new order: ", error);
-            alert("Gagal membuat pesanan baru.");
-        }
-    };
+        } catch (error) { console.error("Error creating new order: ", error); alert("Gagal membuat pesanan baru."); }
+    }, [user]);
 
-    const handleDailyPayment = async (orderId) => {
+    const handleDailyPayment = useCallback(async (orderId) => {
         try {
             const orderDocQuery = db.collection('orders').where('id', '==', orderId).limit(1);
             const snapshot = await orderDocQuery.get();
-
             if (!snapshot.empty) {
                 const docRef = snapshot.docs[0].ref;
                 const currentOrderData = snapshot.docs[0].data();
                 const currentPayments = currentOrderData.payments || [];
                 const tenor = parseInt(currentOrderData.tenor); 
-
                 if (currentPayments.length >= tenor) {
                     alert("Tagihan ini sudah lunas!");
                     return;
                 }
-
                 const newPayment = {
                     date: new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }),
                     collectedBy: user.name || user.email
                 };
-
                 const updatedPayments = [...currentPayments, newPayment];
                 let newStatus = currentOrderData.status;
-
                 if (updatedPayments.length >= tenor) {
                     newStatus = 'Lunas';
                 }
-
-                await docRef.update({
-                    payments: updatedPayments,
-                    status: newStatus
-                });
-
+                await docRef.update({ payments: updatedPayments, status: newStatus });
                 alert('Pembayaran berhasil dicatat!' + (newStatus === 'Lunas' ? ' Dan tagihan sudah Lunas!' : ''));
-
             } else {
                 alert("Order tidak ditemukan untuk mencatat pembayaran!");
             }
-        } catch (error) {
-            console.error("Error logging daily payment: ", error);
-            alert("Gagal mencatat pembayaran.");
-        }
-    };
+        } catch (error) { console.error("Error logging daily payment: ", error); alert("Gagal mencatat pembayaran."); }
+    }, [user]);
 
-    const handleSaveProfile = async (profileData) => {
+    const handleSaveProfile = useCallback(async (profileData) => {
         try {
             await db.collection('users').doc(user.uid).update(profileData);
             setUser(prevUser => ({ ...prevUser, ...profileData }));
             alert('Profil berhasil diperbarui!');
-        } catch (error) {
-            console.error("Error saving profile: ", error);
-            alert("Gagal menyimpan profil.");
-        }
-    };
+        } catch (error) { console.error("Error saving profile: ", error); alert("Gagal menyimpan profil."); }
+    }, [user]);
 
-    const handleUpdateProduct = async (productId, productData) => {
+    const handleUpdateProduct = useCallback(async (productId, productData) => {
         try {
             const productQuery = db.collection('products').where('id', '==', productId).limit(1);
             const snapshot = await productQuery.get();
-
             if (snapshot.empty) {
                 throw new Error("Produk tidak ditemukan untuk diupdate.");
             }
-
             const docId = snapshot.docs[0].id;
             await db.collection('products').doc(docId).update(productData);
             alert('Produk berhasil diperbarui!');
-        } catch (error) {
-            console.error("Error updating product: ", error);
-            alert("Gagal memperbarui produk: " + error.message);
-        }
-    };
+        } catch (error) { console.error("Error updating product: ", error); alert("Gagal memperbarui produk: " + error.message); }
+    }, []);
 
     if (loading) { return <div className="ui active inverted dimmer"><div className="ui text loader">Loading...</div></div>; }
 
@@ -1373,6 +1565,7 @@ function App() {
                     consumers={consumers}
                     onAddProduct={handleAddProduct}
                     onAddPromo={handleAddPromo}
+                    onAddBroadcast={handleAddBroadcast}
                     onUpdateOrderStatus={handleUpdateOrderStatus}
                     onAssignCollector={handleAssignCollector}
                     onUpdateProduct={handleUpdateProduct}
@@ -1398,6 +1591,7 @@ function App() {
                     products={products}
                     orders={orders}
                     promos={promos}
+                    broadcasts={broadcasts}
                     onNewOrder={handleNewOrder}
                     onSaveProfile={handleSaveProfile}
                 />
